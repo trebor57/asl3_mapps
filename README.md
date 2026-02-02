@@ -1,0 +1,60 @@
+# M-App Install (Ruby)
+
+Ruby-based multi-app installer for AllStarLink v3. Installs **AllScan**, **DVSwitch Server**, **Supermon-NG**, **SkywarnPlus-NG**, **saytime-weather-rb**, **sayip-node-utils**, and **internet-monitor** (primarily for mobile nodes).
+
+## Requirements
+
+- Ruby 3.x (stdlib only; no gems)
+- Run as root (e.g. `sudo`). For SkywarnPlus-NG (`-w`), run via `sudo` so the installer runs as your user.
+
+## Usage
+
+```bash
+sudo ./asl3_mapp.rb -a          # AllScan only
+sudo ./asl3_mapp.rb -d          # DVSwitch only
+sudo ./asl3_mapp.rb -s          # Supermon-NG only
+sudo ./asl3_mapp.rb -w          # SkywarnPlus-NG only (install.sh runs as you)
+sudo ./asl3_mapp.rb -y          # saytime-weather-rb only
+sudo ./asl3_mapp.rb -i          # sayip-node-utils (prompts for NODE_NUMBER)
+sudo ./asl3_mapp.rb -m          # internet-monitor (mobile nodes; prompts for NODE_NUMBER)
+sudo ./asl3_mapp.rb -a -d -s -w -y -i -m # All seven
+sudo ./asl3_mapp.rb -h          # Help
+```
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `-a` | Install AllScan |
+| `-d` | Install DVSwitch Server |
+| `-s` | Install Supermon-NG |
+| `-w` | Install SkywarnPlus-NG (must run with `sudo` so install.sh runs as your user) |
+| `-y` | Install saytime-weather-rb (Ruby saytime + weather) |
+| `-i` | Install sayip-node-utils (prompts for NODE_NUMBER) |
+| `-m` | Install internet-monitor (mobile nodes; prompts for NODE_NUMBER) |
+| `-h` | Show help |
+
+## DVSwitch security notice (crypto policy change)
+
+When you install **DVSwitch** (`-d`), this installer makes a **system crypto-policy override for APT/Sequoia** to extend SHA1 acceptance that some DVSwitch-related downloads/metadata may still require.
+
+- **What it does**:
+  - Creates: `/etc/crypto-policies/back-ends/` (if missing)
+  - Copies (if missing): `/usr/share/apt/default-sequoia.config` → `/etc/crypto-policies/back-ends/apt-sequoia.config`
+  - Ensures this line is set in `apt-sequoia.config`:
+    - `sha1.second_preimage_resistance = 2026-06-01`
+
+- **Security impact**: this is a deliberate **weakening of SHA1-related policy** for APT’s Sequoia backend. It’s done only when `-d` is requested, but the resulting config file is **system-wide** until you revert it.
+
+- **How to revert** (if you don’t want this after DVSwitch install):
+  - Remove the override file: `sudo rm -f /etc/crypto-policies/back-ends/apt-sequoia.config`
+  - (Optional) reboot or restart relevant services / rerun your distro’s crypto-policy tooling if applicable.
+
+## Paths
+
+- Log: `/var/log/m_app_install.log`
+- Temp: `/var/tmp/m_app_install` (removed after run)
+
+## License
+
+GPL-3.0-or-later (see script header).
