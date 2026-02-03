@@ -11,6 +11,8 @@ Ruby-based multi-app installer for AllStarLink v3. Installs **AllScan**, **DVSwi
 
 On the **ASL3 Trixie image**, `/var/tmp` is mounted as **tmpfs with `noexec`**, so the script cannot run installers under `/var/tmp/m_app_install`. **Adjust `/etc/fstab`** for `/var/tmp` only: either add `exec` to the mount options, or comment out the `/var/tmp` line. Then remount or reboot before running this script.
 
+**We strongly advise removing all tmpfs entries for `/tmp` and `/var/tmp` from `/etc/fstab`.** tmpfs for these directories is not realistic for production: logs and systemd already manage cleanup and sizing, and `/tmp` and `/var/tmp` should be persistent across reboots for POSIX compliance.
+
 ## Download & permissions
 
 Download the latest script to your home directory and make it executable:
