@@ -5,7 +5,7 @@ Ruby-based multi-app installer for AllStarLink v3. Installs **AllScan**, **DVSwi
 ## Requirements
 
 - Ruby 3.x (stdlib only; no gems)
-- Run as root (e.g. `sudo`). For SkywarnPlus-NG (`-w`), run via `sudo` so the installer runs as your user.
+- **Run with sudo only, from a user account.** The script must be invoked as `sudo ./asl3_mapp.rb ...` while logged in as a normal user. Do **not** run it as root (e.g. after `su -` or root login), and do **not** run it as a normal user without `sudo`—it will exit with an error. This ensures installers that need a non-root user (e.g. SkywarnPlus-NG with `-w`) run correctly.
 
 ## Download & permissions
 
@@ -18,6 +18,8 @@ chmod +x asl3_mapp.rb
 ```
 
 ## Usage
+
+Run the script **with sudo** from your **user account** (not as root):
 
 ```bash
 sudo ./asl3_mapp.rb -a          # AllScan only
