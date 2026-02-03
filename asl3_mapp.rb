@@ -51,6 +51,8 @@ CRYPTO_POLICY_DIR = '/etc/crypto-policies/back-ends'
 APT_SEQUOIA_DEFAULT = '/usr/share/apt/default-sequoia.config'
 APT_SEQUOIA_CONFIG = "#{CRYPTO_POLICY_DIR}/apt-sequoia.config"
 APT_SEQUOIA_SHA1_SECOND_PREIMAGE_RESISTANCE_DATE = '2026-06-01'
+FSTAB = '/etc/fstab'
+FSTAB_TMPFS_TMP_LINE = "tmpfs           /tmp            tmpfs   defaults,noatime,nosuid,nodev,mode=1777,size=256M 0 0"
 
 # Colors
 RED = "\033[0;31m"
@@ -121,6 +123,50 @@ def prompt_node_number
   error_exit('No node number provided.') if node.nil? || node.empty?
   error_exit('Invalid node number. Use digits only.') unless node.match?(/\A\d+\z/)
   node
+end
+
+def ensure_fstab_tmpfs!
+  return unless File.file?(FSTAB) && File.readable?(FSTAB) && File.writable?(FSTAB)
+
+  lines = File.read(FSTAB).lines
+  new_lines = []
+  tmp_line_added = false
+
+  lines.each do |line|
+    if line.match?(/^\s*#/) || line.match?(/^\s*$/)
+      new_lines << line
+      next
+    end
+
+    parts = line.split(/\s+/, 6)
+    if parts.size >= 4 && parts[0] == 'tmpfs' && parts[2] == 'tmpfs'
+      mount_point = parts[1]
+      if mount_point == '/tmp'
+        new_lines << "#{FSTAB_TMPFS_TMP_LINE}\n"
+        tmp_line_added = true
+      else
+        new_lines << "# #{line}"
+      end
+    else
+      new_lines << line
+    end
+  end
+
+  new_lines << "#{FSTAB_TMPFS_TMP_LINE}\n" unless tmp_line_added
+
+  new_content = new_lines.join
+  return if new_content == lines.join
+
+  FileUtils.cp(FSTAB, "#{FSTAB}.m_app_install.bak")
+  File.write(FSTAB, new_content)
+  log(:info, "Updated #{FSTAB}: single tmpfs for /tmp, other tmpfs entries commented out. Backup: #{FSTAB}.m_app_install.bak")
+
+  ok, = run('umount /var/tmp')
+  if ok
+    log(:info, '/var/tmp is now on disk; this run can proceed without reboot.')
+  else
+    log(:warn, 'Could not umount /var/tmp (in use?); reboot and run again for installs to use disk.')
+  end
 end
 
 def set_kv_line(path, key, value)
@@ -418,6 +464,7 @@ FileUtils.chmod(0o755, TEMP_DIR)
 FileUtils.touch(LOG_FILE) unless File.exist?(LOG_FILE)
 
 log(:info, 'Starting M-Apps installation script')
+ensure_fstab_tmpfs!
 
 install_allscan_flag = false
 install_dvswitch_flag = false
