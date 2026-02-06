@@ -48,10 +48,8 @@ INTERNET_MONITOR_VERSION = '1.0.1'
 INTERNET_MONITOR_DEB = "internet-monitor_#{INTERNET_MONITOR_VERSION}-1_all.deb"
 INTERNET_MONITOR_URL = "https://github.com/hardenedpenguin/internet_monitor_rb/releases/download/v#{INTERNET_MONITOR_VERSION}/#{INTERNET_MONITOR_DEB}"
 INTERNET_MONITOR_CONF = '/etc/internet-monitor.conf'
-CRYPTO_POLICY_DIR = '/etc/crypto-policies/back-ends'
-APT_SEQUOIA_DEFAULT = '/usr/share/apt/default-sequoia.config'
-APT_SEQUOIA_CONFIG = "#{CRYPTO_POLICY_DIR}/apt-sequoia.config"
-APT_SEQUOIA_SHA1_SECOND_PREIMAGE_RESISTANCE_DATE = '2026-06-01'
+# Path checked to advise removal of legacy SHA1 crypto-policy override (no longer applied by this script)
+APT_SEQUOIA_OVERRIDE = '/etc/crypto-policies/back-ends/apt-sequoia.config'
 FSTAB = '/etc/fstab'
 FSTAB_TMPFS_TMP_LINE = "tmpfs           /tmp            tmpfs   defaults,noatime,nosuid,nodev,mode=1777,size=256M 0 0"
 
@@ -197,49 +195,18 @@ def set_kv_line(path, key, value)
   end
 end
 
-def ensure_apt_sequoia_sha1_policy!
-  unless File.file?(APT_SEQUOIA_DEFAULT)
-    log(:warn, "Crypto policy source not found: #{APT_SEQUOIA_DEFAULT} (skipping SHA1 policy update)")
-    return
-  end
-
-  FileUtils.mkdir_p(CRYPTO_POLICY_DIR)
-
-  unless File.exist?(APT_SEQUOIA_CONFIG)
-    log(:info, "Creating #{APT_SEQUOIA_CONFIG} from #{APT_SEQUOIA_DEFAULT}...")
-    FileUtils.cp(APT_SEQUOIA_DEFAULT, APT_SEQUOIA_CONFIG)
-  end
-
-  desired = "sha1.second_preimage_resistance = #{APT_SEQUOIA_SHA1_SECOND_PREIMAGE_RESISTANCE_DATE}\n"
-  lines = File.read(APT_SEQUOIA_CONFIG).lines
-  changed = false
-  found = false
-
-  lines = lines.map do |l|
-    if l.match?(/^\s*sha1\.second_preimage_resistance\s*=/)
-      found = true
-      if l != desired
-        changed = true
-        desired
-      else
-        l
+def distro_codename
+  codename = nil
+  if File.readable?('/etc/os-release')
+    File.foreach('/etc/os-release') do |line|
+      if line.strip =~ /\AVERSION_CODENAME=(.+)\z/
+        codename = Regexp.last_match(1).strip
+        break
       end
-    else
-      l
     end
   end
-
-  unless found
-    lines << desired
-    changed = true
-  end
-
-  if changed
-    File.write(APT_SEQUOIA_CONFIG, lines.join)
-    log(:info, "Updated #{APT_SEQUOIA_CONFIG}: #{desired.strip}")
-  else
-    log(:info, "Crypto policy already set: #{desired.strip}")
-  end
+  codename ||= (run('lsb_release -sc')[1]&.strip) if codename.nil? || codename.empty?
+  codename.to_s.empty? ? 'bookworm' : codename
 end
 
 def install_allscan
@@ -274,14 +241,19 @@ end
 def install_dvswitch
   log(:info, 'Installing DVSwitch Server...')
 
-  ensure_apt_sequoia_sha1_policy!
+  if File.file?(APT_SEQUOIA_OVERRIDE)
+    log(:warn, 'APT crypto-policy override is present. DVSwitch now uses SHA-256; you can remove it:')
+    log(:warn, "  sudo rm -f #{APT_SEQUOIA_OVERRIDE}")
+  end
 
   run!('apt install -y php-cgi libapache2-mod-php')
 
+  codename = distro_codename
+  installer_url = codename == 'trixie' ? 'http://dvswitch.org/trixie' : 'http://dvswitch.org/bookworm'
+  installer = codename == 'trixie' ? 'trixie' : 'bookworm'
+
   FileUtils.cd(TEMP_DIR) do
-    installer = 'bookworm'
-    # Original bash script used "dvswitch.org/bookworm"; wget defaults to http
-    safe_download('http://dvswitch.org/bookworm', installer)
+    safe_download(installer_url, installer)
     File.chmod(0o755, installer)
 
     log(:info, 'Running DVSwitch installer...')

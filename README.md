@@ -46,21 +46,15 @@ sudo ./asl3_mapp.rb -h          # Help
 | `-m` | Install internet-monitor (mobile nodes; prompts for NODE_NUMBER) |
 | `-h` | Show help |
 
-## DVSwitch security notice (crypto policy change)
+## DVSwitch (Trixie / Bookworm)
 
-When you install **DVSwitch** (`-d`), this installer makes a **system crypto-policy override for APT/Sequoia** to extend SHA1 acceptance that some DVSwitch-related downloads/metadata may still require.
+DVSwitch is installed using the official scripts from [dvswitch.org](http://dvswitch.org/trixie): **Trixie** or **Bookworm** is chosen automatically from your system’s distro codename. No SHA1 crypto-policy override is applied; the DVSwitch repository is SHA-256 compliant.
 
-- **What it does**:
-  - Creates: `/etc/crypto-policies/back-ends/` (if missing)
-  - Copies (if missing): `/usr/share/apt/default-sequoia.config` → `/etc/crypto-policies/back-ends/apt-sequoia.config`
-  - Ensures this line is set in `apt-sequoia.config`:
-    - `sha1.second_preimage_resistance = 2026-06-01`
+If you previously installed DVSwitch with an older version of this script that created an APT crypto-policy override, remove it:
 
-- **Security impact**: this is a deliberate **weakening of SHA1-related policy** for APT’s Sequoia backend. It’s done only when `-d` is requested, but the resulting config file is **system-wide** until you revert it.
+- `sudo rm -f /etc/crypto-policies/back-ends/apt-sequoia.config`
 
-- **How to revert** (if you don’t want this after DVSwitch install):
-  - Remove the override file: `sudo rm -f /etc/crypto-policies/back-ends/apt-sequoia.config`
-  - (Optional) reboot or restart relevant services / rerun your distro’s crypto-policy tooling if applicable.
+The installer will warn you at run time if this override file is present and advise removal.
 
 ## Paths
 
