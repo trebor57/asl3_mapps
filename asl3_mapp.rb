@@ -86,6 +86,11 @@ def run!(cmd)
   error_exit("Command failed: #{cmd}\n#{stderr}".strip)
 end
 
+def deb_package_installed?(name)
+  ok, _stdout, _stderr = run("dpkg -s #{Shellwords.escape(name)} 2>/dev/null")
+  ok
+end
+
 def run_interactive!(cmd)
   log(:info, "Running: #{cmd}")
   ok = system(cmd)
@@ -157,6 +162,11 @@ def ensure_fstab_tmpfs!
   FileUtils.cp(FSTAB, "#{FSTAB}.m_app_install.bak")
   File.write(FSTAB, new_content)
   log(:info, "Updated #{FSTAB}: single tmpfs for /tmp, other tmpfs entries commented out. Backup: #{FSTAB}.m_app_install.bak")
+
+  log(:warn, 'fstab was modified. Reboot before continuing to ensure /tmp and mounts are correct and to avoid failures during install.')
+  $stdout.write('Reboot now, then re-run this script. Press Enter to continue without rebooting (not recommended): ')
+  $stdout.flush
+  $stdin.gets
 
   # Only unmount if /var/tmp is currently a mount point (e.g. tmpfs).
   mounted, = run('mountpoint -q /var/tmp')
@@ -280,6 +290,13 @@ def install_dvswitch
 end
 
 def install_supermon_ng
+  supermon_install_dir = ENV.fetch('SUPERMON_INSTALL_DIR', '/var/www/html/supermon-ng')
+  common_inc = File.join(supermon_install_dir, 'includes', 'common.inc')
+  if Dir.exist?(supermon_install_dir) && File.file?(common_inc)
+    log(:info, 'Supermon-NG is already installed; skipping installation.')
+    return
+  end
+
   log(:info, 'Installing Supermon-NG...')
 
   FileUtils.cd(TEMP_DIR) do
@@ -366,8 +383,13 @@ def install_saytime_weather_rb
     log(:info, "Downloading #{SAYTIME_WEATHER_RB_DEB}...")
     safe_download(SAYTIME_WEATHER_RB_URL, SAYTIME_WEATHER_RB_DEB)
 
-    log(:info, 'Installing .deb package...')
-    run!("apt install -y ./#{SAYTIME_WEATHER_RB_DEB}")
+    already = deb_package_installed?('saytime-weather-rb')
+    log(:info, already ? 'Reinstalling .deb package...' : 'Installing .deb package...')
+    if already
+      run!("apt install --reinstall -y ./#{SAYTIME_WEATHER_RB_DEB}")
+    else
+      run!("apt install -y ./#{SAYTIME_WEATHER_RB_DEB}")
+    end
 
     FileUtils.rm_f(SAYTIME_WEATHER_RB_DEB)
   end
@@ -381,7 +403,8 @@ def install_sayip_node_utils
     log(:info, "Downloading #{SAYIP_NODE_UTILS_DEB}...")
     safe_download(SAYIP_NODE_UTILS_URL, SAYIP_NODE_UTILS_DEB)
 
-    log(:info, "Installing sayip-node-utils for NODE_NUMBER=#{node_number}...")
+    already = deb_package_installed?('sayip-node-utils')
+    log(:info, already ? "Reinstalling sayip-node-utils for NODE_NUMBER=#{node_number}..." : "Installing sayip-node-utils for NODE_NUMBER=#{node_number}...")
     run!("NODE_NUMBER=#{node_number} dpkg -i ./#{SAYIP_NODE_UTILS_DEB}")
     run!('apt install -f -y')
 
@@ -399,9 +422,14 @@ def install_internet_monitor
     log(:info, "Downloading #{INTERNET_MONITOR_DEB}...")
     safe_download(INTERNET_MONITOR_URL, INTERNET_MONITOR_DEB)
 
-    log(:info, 'Installing .deb package...')
+    already = deb_package_installed?('internet-monitor')
+    log(:info, already ? 'Reinstalling .deb package...' : 'Installing .deb package...')
     # Use apt so dependencies are resolved automatically.
-    run!("apt install -y ./#{INTERNET_MONITOR_DEB}")
+    if already
+      run!("apt install --reinstall -y ./#{INTERNET_MONITOR_DEB}")
+    else
+      run!("apt install -y ./#{INTERNET_MONITOR_DEB}")
+    end
 
     FileUtils.rm_f(INTERNET_MONITOR_DEB)
   end
