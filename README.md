@@ -1,5 +1,7 @@
 # M-App Install (Ruby)
 
+![GitHub total downloads](https://img.shields.io/github/downloads/hardenedpenguin/asl3_mapps/total?style=flat-square)
+
 Ruby-based multi-app installer for AllStarLink v3. Installs **AllScan**, **DVSwitch Server**, **Supermon-NG**, **SkywarnPlus-NG**, **saytime-weather-rb**, **sayip-node-utils**, and **internet-monitor** (primarily for mobile nodes).
 
 ## Requirements
