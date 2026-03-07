@@ -31,14 +31,14 @@ require 'shellwords'
 LOG_FILE = '/var/log/m_app_install.log'
 TEMP_DIR = '/var/tmp/m_app_install'
 DVSWITCH_CONFIG = '/usr/share/dvswitch/include/config.php'
-SUPERMON_NG_VERSION = 'V4.1.2'
+SUPERMON_NG_VERSION = 'V4.1.3'
 SUPERMON_NG_TARBALL = "supermon-ng-#{SUPERMON_NG_VERSION}.tar.xz"
 SUPERMON_NG_URL = "https://github.com/hardenedpenguin/supermon-ng/releases/download/#{SUPERMON_NG_VERSION}/#{SUPERMON_NG_TARBALL}"
 SKYWARNPLUS_NG_VERSION = '1.0.5'
 SKYWARNPLUS_NG_TARBALL = "skywarnplus-ng-#{SKYWARNPLUS_NG_VERSION}.tar.gz"
 SKYWARNPLUS_NG_URL = "https://github.com/hardenedpenguin/SkywarnPlus-NG/releases/download/v#{SKYWARNPLUS_NG_VERSION}/#{SKYWARNPLUS_NG_TARBALL}"
 SKYWARNPLUS_NG_EXTRACT_DIR = "skywarnplus-ng-#{SKYWARNPLUS_NG_VERSION}"
-SAYTIME_WEATHER_RB_VERSION = '0.0.6'
+SAYTIME_WEATHER_RB_VERSION = '0.0.7'
 SAYTIME_WEATHER_RB_DEB = "saytime-weather-rb_#{SAYTIME_WEATHER_RB_VERSION}-1_all.deb"
 SAYTIME_WEATHER_RB_URL = "https://github.com/hardenedpenguin/saytime_weather_rb/releases/download/v#{SAYTIME_WEATHER_RB_VERSION}/#{SAYTIME_WEATHER_RB_DEB}"
 SAYIP_NODE_UTILS_VERSION = '1.0.0'
