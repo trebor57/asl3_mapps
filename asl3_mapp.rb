@@ -31,7 +31,7 @@ require 'shellwords'
 LOG_FILE = '/var/log/m_app_install.log'
 TEMP_DIR = '/var/tmp/m_app_install'
 DVSWITCH_CONFIG = '/usr/share/dvswitch/include/config.php'
-SUPERMON_NG_VERSION = 'V4.1.3'
+SUPERMON_NG_VERSION = 'V4.1.4'
 SUPERMON_NG_TARBALL = "supermon-ng-#{SUPERMON_NG_VERSION}.tar.xz"
 SUPERMON_NG_URL = "https://github.com/hardenedpenguin/supermon-ng/releases/download/#{SUPERMON_NG_VERSION}/#{SUPERMON_NG_TARBALL}"
 SKYWARNPLUS_NG_VERSION = '1.0.6'
