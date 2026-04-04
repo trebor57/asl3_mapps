@@ -163,10 +163,32 @@ def ensure_fstab_tmpfs!
   File.write(FSTAB, new_content)
   log(:info, "Updated #{FSTAB}: single tmpfs for /tmp, other tmpfs entries commented out. Backup: #{FSTAB}.m_app_install.bak")
 
-  log(:warn, 'fstab was modified. Reboot before continuing to ensure /tmp and mounts are correct and to avoid failures during install.')
-  $stdout.write('Reboot now, then re-run this script. Press Enter to continue without rebooting (not recommended): ')
-  $stdout.flush
-  $stdin.gets
+  log(:warn, 'fstab was modified. Reboot before continuing so /tmp and mounts match fstab and installs avoid failures.')
+
+  loop do
+    puts
+    puts 'Choose what to do next:'
+    puts "  #{YELLOW}r#{NC} then Enter — reboot now (recommended); run this script again after the system comes back"
+    puts "  #{YELLOW}Enter only#{NC} — continue without rebooting (may cause install failures)"
+    $stdout.write('Your choice (r + Enter, or Enter alone): ')
+    $stdout.flush
+    line = $stdin.gets
+    break if line.nil?
+
+    choice = line.strip.downcase
+    if choice.empty?
+      log(:warn, 'Continuing without reboot at your request.')
+      break
+    elsif choice == 'r'
+      log(:info, 'Rebooting now…')
+      unless system('shutdown', '-r', 'now')
+        error_exit('Could not start reboot. Run: sudo reboot — then re-run this script.')
+      end
+      exit 0
+    else
+      puts "#{YELLOW}Type r and press Enter to reboot, or press Enter alone to continue.#{NC}"
+    end
+  end
 
   # Only unmount if /var/tmp is currently a mount point (e.g. tmpfs).
   mounted, = run('mountpoint -q /var/tmp')
