@@ -20,7 +20,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-require 'etc'
 require 'fileutils'
 require 'open-uri'
 require 'optparse'
@@ -31,22 +30,9 @@ require 'shellwords'
 LOG_FILE = '/var/log/m_app_install.log'
 TEMP_DIR = '/var/tmp/m_app_install'
 DVSWITCH_CONFIG = '/usr/share/dvswitch/include/config.php'
-SUPERMON_NG_VERSION = 'V4.2.1'
-SUPERMON_NG_TARBALL = "supermon-ng-#{SUPERMON_NG_VERSION}.tar.xz"
-SUPERMON_NG_URL = "https://github.com/hardenedpenguin/supermon-ng/releases/download/#{SUPERMON_NG_VERSION}/#{SUPERMON_NG_TARBALL}"
-SKYWARNPLUS_NG_VERSION = '1.1.0'
-SKYWARNPLUS_NG_TARBALL = "skywarnplus-ng-#{SKYWARNPLUS_NG_VERSION}.tar.gz"
-SKYWARNPLUS_NG_URL = "https://github.com/hardenedpenguin/SkywarnPlus-NG/releases/download/v#{SKYWARNPLUS_NG_VERSION}/#{SKYWARNPLUS_NG_TARBALL}"
-SKYWARNPLUS_NG_EXTRACT_DIR = "skywarnplus-ng-#{SKYWARNPLUS_NG_VERSION}"
-SAYTIME_WEATHER_RB_VERSION = '0.0.26'
-SAYTIME_WEATHER_RB_DEB = "saytime-weather-rb_#{SAYTIME_WEATHER_RB_VERSION}-1_all.deb"
-SAYTIME_WEATHER_RB_URL = "https://github.com/hardenedpenguin/saytime_weather_rb/releases/download/v#{SAYTIME_WEATHER_RB_VERSION}/#{SAYTIME_WEATHER_RB_DEB}"
-SAYIP_NODE_UTILS_VERSION = '1.0.7'
-SAYIP_NODE_UTILS_DEB = "sayip-node-utils_#{SAYIP_NODE_UTILS_VERSION}-1_all.deb"
-SAYIP_NODE_UTILS_URL = "https://github.com/hardenedpenguin/sayip-reboot-halt-saypublicip/releases/download/v#{SAYIP_NODE_UTILS_VERSION}/#{SAYIP_NODE_UTILS_DEB}"
-INTERNET_MONITOR_VERSION = '1.0.1'
-INTERNET_MONITOR_DEB = "internet-monitor_#{INTERNET_MONITOR_VERSION}-1_all.deb"
-INTERNET_MONITOR_URL = "https://github.com/hardenedpenguin/internet_monitor_rb/releases/download/v#{INTERNET_MONITOR_VERSION}/#{INTERNET_MONITOR_DEB}"
+HARDENEDPENGUIN_APT_KEYRING_URL = 'https://hardenedpenguin.github.io/hardenedpenguin-apt/pool/main/h/hardenedpenguin-archive-keyring/hardenedpenguin-archive-keyring_1.0_all.deb'
+HARDENEDPENGUIN_APT_KEYRING_DEB = 'hardenedpenguin-archive-keyring_1.0_all.deb'
+HARDENEDPENGUIN_APT_SOURCE = '/etc/apt/sources.list.d/hardenedpenguin.list'
 INTERNET_MONITOR_CONF = '/etc/internet-monitor.conf'
 FSTAB = '/etc/fstab'
 FSTAB_TMPFS_TMP_LINE = "tmpfs           /tmp            tmpfs   defaults,noatime,nosuid,nodev,mode=1777,size=256M 0 0"
@@ -89,6 +75,32 @@ end
 def deb_package_installed?(name)
   ok, _stdout, _stderr = run("dpkg -s #{Shellwords.escape(name)} 2>/dev/null")
   ok
+end
+
+def hardenedpenguin_apt_configured?
+  File.file?(HARDENEDPENGUIN_APT_SOURCE) || deb_package_installed?('hardenedpenguin-archive-keyring')
+end
+
+def ensure_hardenedpenguin_apt!
+  return if hardenedpenguin_apt_configured?
+
+  log(:info, 'Setting up hardenedpenguin APT repository...')
+  FileUtils.cd(TEMP_DIR) do
+    safe_download(HARDENEDPENGUIN_APT_KEYRING_URL, HARDENEDPENGUIN_APT_KEYRING_DEB)
+    run!("apt install -y ./#{HARDENEDPENGUIN_APT_KEYRING_DEB}")
+    FileUtils.rm_f(HARDENEDPENGUIN_APT_KEYRING_DEB)
+  end
+  run!('apt update')
+  log(:info, 'hardenedpenguin APT repository configured.')
+end
+
+def apt_install_package!(package_name)
+  ensure_hardenedpenguin_apt!
+  if deb_package_installed?(package_name)
+    run!("apt install --reinstall -y #{Shellwords.escape(package_name)}")
+  else
+    run!("apt install -y #{Shellwords.escape(package_name)}")
+  end
 end
 
 def run_interactive!(cmd)
@@ -312,85 +324,24 @@ def install_dvswitch
 end
 
 def install_supermon_ng
-  supermon_install_dir = ENV.fetch('SUPERMON_INSTALL_DIR', '/var/www/html/supermon-ng')
-  common_inc = File.join(supermon_install_dir, 'includes', 'common.inc')
-  if Dir.exist?(supermon_install_dir) && File.file?(common_inc)
+  if deb_package_installed?('supermon-ng')
     log(:info, 'Supermon-NG is already installed; skipping installation.')
     return
   end
 
   log(:info, 'Installing Supermon-NG...')
-
-  FileUtils.cd(TEMP_DIR) do
-    log(:info, "Downloading #{SUPERMON_NG_TARBALL}...")
-    safe_download(SUPERMON_NG_URL, SUPERMON_NG_TARBALL)
-
-    log(:info, 'Extracting archive...')
-    run!("tar -xJf #{SUPERMON_NG_TARBALL}")
-
-    install_dir = 'supermon-ng'
-    unless Dir.exist?(install_dir)
-      error_exit("Expected directory #{install_dir} not found after extract")
-    end
-
-    log(:info, 'Running Supermon-NG installer...')
-    Dir.chdir(install_dir) do
-      ok, _, stderr = run('./install.sh')
-      if ok
-        log(:info, 'Supermon-NG installation completed successfully')
-      else
-        error_exit("Supermon-NG installation failed: #{stderr}")
-      end
-    end
-
-    FileUtils.rm_f(SUPERMON_NG_TARBALL)
-    FileUtils.rm_rf(install_dir)
-  end
+  apt_install_package!('supermon-ng')
+  log(:info, 'Supermon-NG installation completed successfully')
 end
 
 def install_skywarnplus_ng
-  sudo_user = ENV['SUDO_USER']
-
-  log(:info, "Installing SkywarnPlus-NG (install.sh will run as #{sudo_user})...")
-
-  begin
-    pw = Etc.getpwnam(sudo_user)
-  rescue ArgumentError
-    error_exit("User #{sudo_user} (SUDO_USER) not found on this system.")
+  if deb_package_installed?('skywarnplus-ng-all') || deb_package_installed?('skywarnplus-ng')
+    log(:info, 'SkywarnPlus-NG is already installed; skipping installation.')
+    return
   end
 
-  extract_path = File.join(TEMP_DIR, SKYWARNPLUS_NG_EXTRACT_DIR)
-
-  FileUtils.cd(TEMP_DIR) do
-    log(:info, "Downloading #{SKYWARNPLUS_NG_TARBALL}...")
-    safe_download(SKYWARNPLUS_NG_URL, SKYWARNPLUS_NG_TARBALL)
-
-    log(:info, 'Extracting archive...')
-    run!("tar -xzf #{SKYWARNPLUS_NG_TARBALL}")
-
-    unless Dir.exist?(SKYWARNPLUS_NG_EXTRACT_DIR)
-      error_exit("Expected directory #{SKYWARNPLUS_NG_EXTRACT_DIR} not found after extract")
-    end
-
-    log(:info, "Chowning #{SKYWARNPLUS_NG_EXTRACT_DIR} to #{sudo_user}...")
-    FileUtils.chown_R(pw.uid, pw.gid, SKYWARNPLUS_NG_EXTRACT_DIR)
-
-    log(:info, 'Running SkywarnPlus-NG installer (as non-root)...')
-    home_s = Shellwords.escape(pw.dir)
-    path_s = Shellwords.escape(extract_path)
-    install_cmd = "sudo -u #{sudo_user} env HOME=#{home_s} bash -c \"cd #{path_s} && ./install.sh\""
-    ok, _, stderr = run(install_cmd)
-    if ok
-      log(:info, 'SkywarnPlus-NG installation completed successfully')
-    else
-      error_exit("SkywarnPlus-NG installation failed: #{stderr}")
-    end
-
-    FileUtils.rm_f(SKYWARNPLUS_NG_TARBALL)
-    FileUtils.rm_rf(SKYWARNPLUS_NG_EXTRACT_DIR)
-  end
-
-  log(:info, 'Enabling and starting skywarnplus-ng service...')
+  log(:info, 'Installing SkywarnPlus-NG (skywarnplus-ng-all)...')
+  apt_install_package!('skywarnplus-ng-all')
   run!('systemctl enable skywarnplus-ng')
   run!('systemctl start skywarnplus-ng')
   log(:info, 'SkywarnPlus-NG service enabled and started. Dashboard: http://localhost:8100 (default: admin / skywarn123)')
@@ -398,63 +349,40 @@ def install_skywarnplus_ng
 end
 
 def install_saytime_weather_rb
+  if deb_package_installed?('saytime-weather-rb')
+    log(:info, 'saytime-weather-rb is already installed; skipping installation.')
+    return
+  end
+
   log(:info, 'Installing saytime-weather-rb...')
   log(:warn, 'Do not install this alongside other saytime_weather implementations; it is a replacement.')
-
-  FileUtils.cd(TEMP_DIR) do
-    log(:info, "Downloading #{SAYTIME_WEATHER_RB_DEB}...")
-    safe_download(SAYTIME_WEATHER_RB_URL, SAYTIME_WEATHER_RB_DEB)
-
-    already = deb_package_installed?('saytime-weather-rb')
-    log(:info, already ? 'Reinstalling .deb package...' : 'Installing .deb package...')
-    if already
-      run!("apt install --reinstall -y ./#{SAYTIME_WEATHER_RB_DEB}")
-    else
-      run!("apt install -y ./#{SAYTIME_WEATHER_RB_DEB}")
-    end
-
-    FileUtils.rm_f(SAYTIME_WEATHER_RB_DEB)
-  end
+  apt_install_package!('saytime-weather-rb')
+  log(:info, 'saytime-weather-rb installation completed successfully')
 end
 
 def install_sayip_node_utils
-  log(:info, 'Installing sayip-node-utils (SayIP/reboot/halt/public IP)...')
-  node_number = prompt_node_number
-
-  FileUtils.cd(TEMP_DIR) do
-    log(:info, "Downloading #{SAYIP_NODE_UTILS_DEB}...")
-    safe_download(SAYIP_NODE_UTILS_URL, SAYIP_NODE_UTILS_DEB)
-
-    already = deb_package_installed?('sayip-node-utils')
-    log(:info, already ? "Reinstalling sayip-node-utils for NODE_NUMBER=#{node_number}..." : "Installing sayip-node-utils for NODE_NUMBER=#{node_number}...")
-    run!("NODE_NUMBER=#{node_number} dpkg -i ./#{SAYIP_NODE_UTILS_DEB}")
-    run!('apt install -f -y')
-
-    FileUtils.rm_f(SAYIP_NODE_UTILS_DEB)
+  if deb_package_installed?('sayip-node-utils')
+    log(:info, 'sayip-node-utils is already installed; skipping installation.')
+    return
   end
 
+  log(:info, 'Installing sayip-node-utils (SayIP/reboot/halt/public IP)...')
+  node_number = prompt_node_number
+  ensure_hardenedpenguin_apt!
+  run!("NODE_NUMBER=#{Shellwords.escape(node_number)} apt install -y sayip-node-utils")
   log(:info, 'Post-install: you may need `sudo asterisk -rx "rpt reload"` (and/or restart asterisk) for new DTMF config to load.')
 end
 
 def install_internet_monitor
+  if deb_package_installed?('internet-monitor')
+    log(:info, 'internet-monitor is already installed; skipping installation.')
+    return
+  end
+
   log(:info, 'Installing internet-monitor (primarily for mobile nodes)...')
   node_number = prompt_node_number
-
-  FileUtils.cd(TEMP_DIR) do
-    log(:info, "Downloading #{INTERNET_MONITOR_DEB}...")
-    safe_download(INTERNET_MONITOR_URL, INTERNET_MONITOR_DEB)
-
-    already = deb_package_installed?('internet-monitor')
-    log(:info, already ? 'Reinstalling .deb package...' : 'Installing .deb package...')
-    # Use apt so dependencies are resolved automatically.
-    if already
-      run!("apt install --reinstall -y ./#{INTERNET_MONITOR_DEB}")
-    else
-      run!("apt install -y ./#{INTERNET_MONITOR_DEB}")
-    end
-
-    FileUtils.rm_f(INTERNET_MONITOR_DEB)
-  end
+  ensure_hardenedpenguin_apt!
+  run!("NODE_NUMBER=#{Shellwords.escape(node_number)} apt install -y internet-monitor")
 
   log(:info, "Writing NODE_NUMBER=#{node_number} to #{INTERNET_MONITOR_CONF}...")
   set_kv_line(INTERNET_MONITOR_CONF, 'NODE_NUMBER', node_number)
@@ -472,7 +400,7 @@ def usage
       -a    Install AllScan
       -d    Install DVSwitch
       -s    Install Supermon-NG
-      -w    Install SkywarnPlus-NG (run with sudo so install.sh runs as your user)
+      -w    Install SkywarnPlus-NG (skywarnplus-ng-all from hardenedpenguin APT)
       -y    Install saytime-weather-rb (Ruby saytime + weather)
       -i    Install sayip-node-utils (prompts for NODE_NUMBER)
       -m    Install internet-monitor (mobile nodes; prompts for NODE_NUMBER)
